@@ -1,46 +1,51 @@
-# 使用基于 Debian 的镜像，兼容性比 Alpine 更好，不容易报错
-FROM node:18-slim
+# Base image
+FROM ghcr.io/yu2051/jiuguan002:latest
 
-# 1. 安装必要的系统工具 (Git, Gettext, Python, 编译工具)
-# 这些是做“硬菜”必须的工具
-RUN apt-get update && apt-get install -y \
-    git \
-    gettext-base \
-    python3 \
-    make \
-    g++ \
-    build-essential \
-    && rm -rf /var/lib/apt/lists/*
+# Switch to root user to install tools and prepare the filesystem
+USER root
 
-# 2. 设置工作目录
-WORKDIR /home/node/app
+# 1. Install 'gettext' and 'git'.
+RUN apk add --no-cache gettext git
 
-# 3. 复制所有文件
-COPY . .
-
-# 4. 创建数据目录
+# 2. Create the data directory.
 RUN mkdir -p /home/node/app/data
 
-# --- 安装云端备份插件 (Cloud Saves) ---
+# 3. Copy the configuration template and the entrypoint script.
+COPY config.template.yaml /home/node/app/config.template.yaml
+COPY entrypoint.sh /home/node/app/entrypoint.sh
+
+# --- Install the cloud-saves plugin EXACTLY as per the tutorial ---
+# a. Define the target plugins directory specified by the tutorial.
 ARG PLUGINS_DIR=/home/node/app/plugins
+
+# b. Create the plugins directory.
 RUN mkdir -p ${PLUGINS_DIR}
+
+# c. Switch the working directory to the plugins folder.
 WORKDIR ${PLUGINS_DIR}
+
+# d. Run 'git clone' from within the plugins directory.
+# This will create the 'cloud-saves' sub-directory automatically.
 RUN git clone https://github.com/fuwei99/cloud-saves
+
+# e. Switch the working directory into the newly created plugin folder.
 WORKDIR ${PLUGINS_DIR}/cloud-saves
-RUN npm install
-# -----------------------------------
 
-# 5. 回到主目录，安装酒馆依赖
+# f. Run 'npm install' to install dependencies.
+RUN npm install
+
+# g. Reset the working directory back to the application root.
 WORKDIR /home/node/app
-RUN npm install
+# --- End of plugin installation ---
 
-# 6. 【关键】修复 Windows 换行符问题 & 加权限
-# 防止因为你在 Windows 上创建文件导致格式错误
-RUN sed -i 's/\r$//' entrypoint.sh && chmod +x entrypoint.sh
-
-# 7. 修复文件权限
+# 4. Set ownership for the ENTIRE application directory to the 'node' user.
 RUN chown -R node:node /home/node/app
 
-# 8. 启动
+# 5. Make the entrypoint script executable.
+RUN chmod +x /home/node/app/entrypoint.sh
+
+# 6. Switch to the final, non-privileged user.
 USER node
-ENTRYPOINT ["./entrypoint.sh"]
+
+# 7. Set the entrypoint to our script.
+ENTRYPOINT ["/home/node/app/entrypoint.sh"]
