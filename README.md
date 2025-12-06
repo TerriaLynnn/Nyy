@@ -12,3 +12,4 @@ LLM Frontend for Power Users
 ## License
 
 AGPL-3.0
+app_port: 8000
